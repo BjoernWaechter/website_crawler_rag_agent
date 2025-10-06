@@ -8,8 +8,6 @@ import boto3
 from boto3.session import Session
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
-from botocore.credentials import Credentials
-from botocore.exceptions import ClientError
 from requests import request
 from dotenv import load_dotenv
 from requests_aws4auth import AWS4Auth
@@ -28,12 +26,11 @@ region = os.getenv("AWS_REGION")
 # REGION CONFIGURATION:
 # ---------------------------------------------------------------------
 os.environ["AWS_REGION"] = region
-aoss_host = os.getenv("AOSS_HOST")
+aoss_host = os.getenv("OPENSEARCH_HOST")
 
 service = "aoss"
 bedrock = boto3.client("bedrock-runtime", region_name=region)
-credentials = boto3.Session().get_credentials()
-awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
+
 
 # ---------------------------------------------------------------------
 # HELPER FUNCTION TO GET AWS CREDENTIALS SAFELY
@@ -132,6 +129,8 @@ def askQuestion(question):
     Sends a JSON POST request to the Bedrock Agent endpoint and returns the
     captured output (for debugging) and the final LLM response text.
     """
+    credentials = boto3.Session().get_credentials()
+    awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
 
     response = bedrock.invoke_model(
         modelId=os.getenv('TEXT_EMBEDDING_MODEL'),
@@ -153,12 +152,12 @@ def askQuestion(question):
     response = opensearch_client.search(
         index=os.getenv("OPENSEARCH_INDEX"),
         body={
-            "size": 5,
+            "size": int(os.getenv("OPENSEARCH_MAX_RESULT")),
             "query": {
                 "knn": {
                     "vector_field": {
                         "vector": query_vector,
-                        "k": 5
+                        "k": int(os.getenv("OPENSEARCH_MAX_RESULT"))
                     }
                 }
             }
@@ -191,10 +190,10 @@ def decode_response(response):
             # If a particular chunk can't be decoded as UTF-8, just skip it
             continue
 
-    print("Decoded response:", string)
+    # print("Decoded response:", string)
     split_response = string.split(":message-type")
-    print(f"Split Response: {split_response}")
-    print(f"Length of split: {len(split_response)}")
+    # print(f"Split Response: {split_response}")
+    # print(f"Length of split: {len(split_response)}")
 
     final_response = ""
     for idx in range(len(split_response)):
@@ -209,14 +208,14 @@ def decode_response(response):
 
     # Attempt to parse the last part for finalResponse
     last_response = split_response[-1]
-    print(f"Last Response: {last_response}")
+    # print(f"Last Response: {last_response}")
     if "bytes" in last_response:
-        print("Bytes in last response")
+        # print("Bytes in last response")
         encoded_last_response = last_response.split("\"")[3]
         decoded = base64.b64decode(encoded_last_response)
         final_response = decoded.decode('utf-8')
     else:
-        print("No bytes in last response")
+        # print("No bytes in last response")
         part1 = string[string.find('finalResponse') + len('finalResponse":'):]
         part2 = part1[:part1.find('"}') + 2]
         final_response = json.loads(part2)['text']

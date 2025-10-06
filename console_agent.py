@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     region = os.getenv("AWS_REGION")
     service = "aoss"
-    aoss_host = os.getenv("AOSS_HOST")
+    aoss_host = os.getenv("OPENSEARCH_HOST")
 
     credentials = boto3.Session().get_credentials()
     awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
@@ -66,12 +66,12 @@ if __name__ == '__main__':
     response = opensearch_client.search(
         index=os.getenv("OPENSEARCH_INDEX"),
         body={
-            "size": 5,
+            "size": int(os.getenv("OPENSEARCH_MAX_RESULT")),
             "query": {
                 "knn": {
                     "vector_field": {
                         "vector": query_vector,
-                        "k": 5
+                        "k": int(os.getenv("OPENSEARCH_MAX_RESULT"))
                     }
                 }
             }
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
     context = "\n".join([doc['_source']["text"] for doc in response['hits']['hits']])
     prompt_without_context = f"Question: {input_text}"
-    prompt = f"Answer based on context:\n{context}\n\nQuestion: {input_text}"
+    prompt = f"Answer based on context where we always means Vector:\n{context}\n\nQuestion: {input_text}"
 
     print('#' * 8 + " Result without RAG " + '#' * 8)
     print(invoke_model(prompt_without_context))
